@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>netstandard2.1</TargetFramework>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Quizzes.Common\Quizzes.Common.csproj" />
+    <ProjectReference Include="..\Quizzes.Domain\Quizzes.Domain.csproj" />
+  </ItemGroup>
+
+</Project>
