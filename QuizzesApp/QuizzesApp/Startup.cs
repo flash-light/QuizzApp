@@ -18,6 +18,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using Quizzes.API.Infrastructure.Auth.Model;
+using Quizzes.Common.Helpers;
 using Quizzes.Persistance;
 
 namespace QuizzesApp
@@ -71,6 +72,7 @@ namespace QuizzesApp
                     ValidateLifetime = true,
                     ValidAudience = Configuration["JWT:ValidAudience"],
                     ValidIssuer = Configuration["JWT:ValidIssuer"],
+                    LifetimeValidator = TokenLifetimeValidator.Validate,
                     IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(Configuration["JWT:Secret"]))
                 };
             });
