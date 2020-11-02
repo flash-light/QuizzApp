@@ -13,6 +13,7 @@ using Quizzes.Common.Models;
 
 namespace QuizzesApp.Controllers
 {
+    
     [Route("[controller]")]
     [ApiController]
     [Authorize]
@@ -27,12 +28,12 @@ namespace QuizzesApp.Controllers
 
 
         [HttpPost("Index")]
-        public ActionResult<ServiceResult<TestModelDTO>> Index([FromBody]TestModelDTO model)
-        {            
+        public ActionResult<ServiceResult<TestModelDTO>> Index([FromBody] TestModelDTO model)
+        {
             return new ServiceResult<TestModelDTO> { Success = true, Data = model };
         }
 
-        
+
 
     }
 }

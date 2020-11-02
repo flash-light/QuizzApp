@@ -1,7 +1,9 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text;
 using System.Threading.Tasks;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
@@ -13,7 +15,9 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
+using Quizzes.API.Infrastructure.Auth.Model;
 using Quizzes.Persistance;
 
 namespace QuizzesApp
@@ -30,33 +34,47 @@ namespace QuizzesApp
         // This method gets called by the runtime. Use this method to add services to the container.
         public void ConfigureServices(IServiceCollection services)
         {
-            services.AddAuthentication("CookieAuth")
-                .AddCookie("CookieAuth", config =>
-                {
-                    config.Cookie.Name = "QuizzApp.Cookie";
-                    config.LoginPath = "/Home/Authenticate";
-                });
-            services.AddAuthorization(config => {
-                var defaultAuthBuilder = new AuthorizationPolicyBuilder();
-                var defaultAuthPolicy = defaultAuthBuilder
-                    .RequireAuthenticatedUser()
-                    .Build();
-
-                config.DefaultPolicy = defaultAuthPolicy;
-            });
+           
             services.AddControllers();
             AddDbContexts(services, Configuration);
 
-            services.AddIdentity<IdentityUser, IdentityRole>(config =>
-            {
-                config.Password.RequiredLength = 6;
-                config.Password.RequireDigit = false;
-                config.Password.RequireNonAlphanumeric = false;
-                config.Password.RequireUppercase = false;
-
-            })
+            // For Identity  
+            services.AddIdentity<AppUserModel, IdentityRole<int>>()
                 .AddEntityFrameworkStores<QuizzDBContext>()
                 .AddDefaultTokenProviders();
+
+            services.AddAuthorization(auth =>
+            {
+                auth.AddPolicy(JwtBearerDefaults.AuthenticationScheme, new AuthorizationPolicyBuilder()
+                    .AddAuthenticationSchemes(JwtBearerDefaults.AuthenticationScheme‌​)
+                    .RequireAuthenticatedUser()
+                    .Build());
+            });
+
+            // Adding Authentication  
+            services.AddAuthentication(options =>
+            {
+                options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
+                options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
+                options.DefaultScheme = JwtBearerDefaults.AuthenticationScheme;
+            })
+
+            // Adding Jwt Bearer  
+            .AddJwtBearer(options =>
+            {
+                options.SaveToken = true;
+                options.RequireHttpsMetadata = false;
+                options.TokenValidationParameters = new TokenValidationParameters()
+                {
+                    ValidateIssuer = true,
+                    ValidateAudience = true,
+                    ValidateLifetime = true,
+                    ValidAudience = Configuration["JWT:ValidAudience"],
+                    ValidIssuer = Configuration["JWT:ValidIssuer"],
+                    IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(Configuration["JWT:Secret"]))
+                };
+            });
+
 
             services.AddSwaggerGen(c =>
             {
@@ -104,9 +122,10 @@ namespace QuizzesApp
             app.UseHttpsRedirection();
 
 
-            app.UseRouting();
             app.UseAuthentication();
+            app.UseRouting();
             app.UseAuthorization();
+
 
             app.UseEndpoints(endpoints =>
             {

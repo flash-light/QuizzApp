@@ -1,78 +1,106 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.IdentityModel.Tokens.Jwt;
 using System.Linq;
+using System.Security.Claims;
+using System.Text;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
+using Microsoft.IdentityModel.Tokens;
+using Quizzes.API.Infrastructure.Auth.Model;
 using Quizzes.Common.Models;
 using QuizzesApp.Auth.Models;
 
 namespace QuizzesApp.Auth
 {
-    [Route("api/[controller]")]
+    [Route("[controller]")]
     [ApiController]
     public class AuthController : ControllerBase
     {
         private readonly ILogger<AuthController> _logger;
-        private readonly UserManager<IdentityUser> _userManager;
-        private readonly SignInManager<IdentityUser> _signInManager;
+        private readonly UserManager<AppUserModel> _userManager;
+        private readonly RoleManager<IdentityRole<int>> _roleManager;
+        private readonly IConfiguration _configuration;
 
         public AuthController(
-            ILogger<AuthController> logger,
-            UserManager<IdentityUser> userManager,
-            SignInManager<IdentityUser> signInManager
+            UserManager<AppUserModel> userManager,
+            RoleManager<IdentityRole<int>> roleManager,
+            IConfiguration configuration
             )
         {
-            _logger = logger;
-            _userManager = userManager;
-            _signInManager = signInManager;
+            this._userManager = userManager;
+            this._roleManager = roleManager;
+            _configuration = configuration;
         }
+
 
 
 
         [HttpPost("Login")]
-        public async Task<ActionResult<ServiceResult<string>>> LogInAsync([FromBody] AuthModel authModel)
+        public async Task<ActionResult<ServiceResult<string>>> LogInAsync([FromBody] LoginModel loginModel)
         {
-            var user = await _userManager.FindByNameAsync(authModel.username);
 
-            if(user != null)
+            var user = await _userManager.FindByNameAsync(loginModel.Username);
+            if (user != null && await _userManager.CheckPasswordAsync(user, loginModel.Password))
             {
-                var signInResult = await _signInManager.PasswordSignInAsync(user, authModel.password, false, false);
-                if(signInResult.Succeeded)
+                var userRoles = await _userManager.GetRolesAsync(user);
+
+                var authClaims = new List<Claim>
                 {
-                    return new ServiceResult<string> { Success = true, Data = "token" };
+                    new Claim(ClaimTypes.Name, user.UserName),
+                    new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),
+                };
+
+                foreach (var userRole in userRoles)
+                {
+                    authClaims.Add(new Claim(ClaimTypes.Role, userRole));
                 }
+
+                var authSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_configuration["JWT:Secret"]));
+
+                var token = new JwtSecurityToken(
+                    issuer: _configuration["JWT:ValidIssuer"],
+                    audience: _configuration["JWT:ValidAudience"],
+                    expires: DateTime.Now.AddMinutes(1),
+                    claims: authClaims,
+                    signingCredentials: new SigningCredentials(authSigningKey, SecurityAlgorithms.HmacSha256)
+                    );
+
+                return Ok(new
+                {
+                    token = new JwtSecurityTokenHandler().WriteToken(token),
+                    expiration = token.ValidTo
+                });
             }
-
-            return new ServiceResult<string> { Success = true, Data = "Index" };
-        }
-
-
-        [HttpPost("Logout")]
-        public ActionResult<ServiceResult<string>> LogOut([FromBody] AuthModel authModel)
-        {
-
-            return new ServiceResult<string> { Success = true, Data = "Index" };
+            return Unauthorized();
         }
 
 
         [HttpPost("Register")]
-        public async Task<ActionResult<ServiceResult<string>>> Register([FromBody] AuthModel authModel)
+        public async Task<ActionResult<ServiceResult<string>>> Register([FromBody] RegisterModel model)
         {
-            var user = new IdentityUser
+            var userExists = await _userManager.FindByNameAsync(model.Username);
+            if (userExists != null)
+                return StatusCode(StatusCodes.Status500InternalServerError, new Response { Status = "Error", Message = "User already exists!" });
+
+            AppUserModel user = new AppUserModel()
             {
-                UserName = authModel.username,
-                Email = ""
+                Email = model.Email,
+                SecurityStamp = Guid.NewGuid().ToString(),
+                UserName = model.Username
             };
-            var result = await _userManager.CreateAsync(user, authModel.password);
-
-            if(result.Succeeded)
-            {
-
+            var result = await _userManager.CreateAsync(user, model.Password);
+            if (!result.Succeeded) {
+                return new ServiceResult<string> { Success = false, Data = "User creation failed! Please check user details and try again." };
             }
-            return new ServiceResult<string> { Success = true, Data = "Index" };
+              
+            return new ServiceResult<string> { Success = true, Data = "Success" };
         }
+
+
     }
 }
